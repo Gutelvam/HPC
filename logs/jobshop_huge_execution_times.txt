@@ -1,0 +1,2 @@
+Input: jobshop_huge, Sequential, Avg Time: 0.000500 seconds
+Input: jobshop_huge, Requested Threads: 4, Effective Threads: 4, Avg Time: 0.001200 seconds
