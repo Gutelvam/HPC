@@ -26,23 +26,23 @@ The Job-Shop Scheduling Problem is a combinatorial optimization problem that inv
 The organization of the project's files and directories is as follows:
 
 .
-├── data/ # Input files (.jss) containing problem definitions
-│ ├── jobshop_small.jss # Small dataset (3 jobs, 3 machines)
-│ ├── jobshop_medium.jss # Medium dataset (6 jobs, 6 machines)
-│ └── jobshop_huge.jss # Large dataset (25 jobs, 25 machines)
-├── logs/ # Directory to store execution and analysis logs
-│ ├── *_execution_times.txt # Average execution times recorded
-│ ├── sequence.txt # Operation sequences executed (for debugging/analysis)
-│ └── timing.txt # Detailed timing per thread (in the parallel version)
-├── mappings/ # Mapping files used for visualization
-│ ├── mapping_small.txt # Mapping for the small dataset
-│ ├── mapping_medium.txt # Mapping for the medium dataset
-│ └── mapping_huge.txt # Mapping for the large dataset
-├── viz/ # Directory to save generated visualizations
-├── job_shop_sequential.c # Source code of the sequential implementation
-├── job_shop_parallel.c # Source code of the parallel implementation with OpenMP
-├── job_shop_visualizer.py # Python script to generate Gantt charts
-└── README.md # This file (report)
+├── data/ # Input files (.jss) containing problem definitions  
+│ ├── jobshop_small.jss # Small dataset (3 jobs, 3 machines)  
+│ ├── jobshop_medium.jss # Medium dataset (6 jobs, 6 machines)  
+│ └── jobshop_huge.jss # Large dataset (25 jobs, 25 machines)  
+├── logs/ # Directory to store execution and analysis logs  
+│ ├── *_execution_times.txt # Average execution times recorded  
+│ ├── sequence.txt # Operation sequences executed (for debugging/analysis)  
+│ └── timing.txt # Detailed timing per thread (in the parallel version)  
+├── mappings/ # Mapping files used for visualization  
+│ ├── mapping_small.txt # Mapping for the small dataset  
+│ ├── mapping_medium.txt # Mapping for the medium dataset  
+│ └── mapping_huge.txt # Mapping for the large dataset  
+├── viz/ # Directory to save generated visualizations  
+├── job_shop_sequential.c # Source code of the sequential implementation  
+├── job_shop_parallel.c # Source code of the parallel implementation with OpenMP  
+├── job_shop_visualizer.py # Python script to generate Gantt charts  
+└── README.md # This file (report)  
 
 ---
 
