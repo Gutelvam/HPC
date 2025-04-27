@@ -25,7 +25,7 @@ The Job-Shop Scheduling Problem is a combinatorial optimization problem that inv
 
 The organization of the project's files and directories is as follows:
 
-.
+.  
 ├── data/ # Input files (.jss) containing problem definitions  
 │ ├── jobshop_small.jss # Small dataset (3 jobs, 3 machines)  
 │ ├── jobshop_medium.jss # Medium dataset (6 jobs, 6 machines)  
