@@ -1,423 +1,271 @@
-# Problema Job-Shop - Implementação Sequencial e Paralela
+# Technical Report: Sequential and Parallel Implementation of the Job-Shop Scheduling Problem
 
-Este projeto implementa soluções para o Problema de Escalonamento Job-Shop (JSSP), de acordo com o trabalho prático de Computação de Alto Desempenho. São fornecidas duas implementações: uma sequencial e outra paralela utilizando OpenMP para partilha de memória.
+This document serves as a complete technical report for the project that implements solutions for the Job-Shop Scheduling Problem (JSSP). The project was developed as part of the practical work for the High-Performance Computing course. Two implementations were created and analyzed: a sequential version and a parallel version using OpenMP for shared memory.
 
-## Relatório Técnico
+The report is organized to cover the main topics of the project:
 
-Este README serve como relatório técnico completo do projeto, abordando os três principais tópicos solicitados no enunciado:
-- **A. Implementação Sequencial**: descrição do algoritmo e sua implementação
-- **B. Implementação Paralela**: particionamento, comunicação, exclusão mútua e análise
-- **C. Análise de Desempenho**: medições, comparações e avaliação de speedup
+* **A. Sequential Implementation**: Description of the algorithm and its implementation.
+* **B. Parallel Implementation**: Details on partitioning, communication, mutual exclusion, and analysis of the parallel implementation.
+* **C. Performance Analysis**: Measurement of execution times, comparison between the implementations, and evaluation of speedup and efficiency.
 
-## Estrutura do Projeto
+---
+
+## Description of the Job-Shop Scheduling Problem (JSSP)
+
+The Job-Shop Scheduling Problem is a combinatorial optimization problem that involves scheduling a set of **jobs** on a set of **machines**. Each job consists of a sequence of **operations**. Each operation requires a specific machine for a given period of time. The classic objective is to find a schedule that minimizes the **makespan**, that is, the total time needed to complete all jobs, while respecting the following fundamental constraints:
+
+1. **Machine Constraint**: A machine can process only one operation at a time.
+2. **Precedence Constraint**: The operations of the same job must be executed in a predefined order.
+3. **Non-Interruption Constraint**: Once started, an operation cannot be interrupted.
+
+
+---
+
+## Project Structure
+
+The organization of the project's files and directories is as follows:
 
 .
-├── data/                       # Arquivos de entrada para os testes
-│   ├── jobshop_small.jss      # Conjunto de dados pequeno (3 jobs, 3 máquinas)
-│   ├── jobshop_medium.jss     # Conjunto de dados médio (6 jobs, 6 máquinas)
-│   └── jobshop_huge.jss       # Conjunto de dados grande (25 jobs, 25 máquinas)
-├── logs/                       # Diretório para logs de execução
-│   ├── *_execution_times.txt  # Tempos médios de execução
-│   ├── sequence.txt       # Sequências de operações executadas
-│   └── timing.txt         # Tempos detalhados por thread
-├── mappings/                   # Arquivos de mapeamento para visualização
-│   ├── mapping_small.txt      # Mapeamento para o conjunto pequeno
-│   ├── mapping_medium.txt     # Mapeamento para o conjunto médio
-│   └── mapping_huge.txt       # Mapeamento para o conjunto grande
-├── viz/                        # Diretório para visualizações geradas
-├── job_shop_sequential.c       # Implementação sequencial
-├── job_shop_parallel.c         # Implementação paralela com OpenMP
-├── job_shop_visualizer.py      # Script para visualização dos resultados
-├── LICENSE                     # Licença do projeto
-├── Makefile                    # Arquivo para compilação
-├── README.md                   # Este arquivo
-└── performance_analysis.sh     # Script para análise de desempenho
-
-## Algoritmos Implementados
-
-### Algoritmo Sequencial
-
-A implementação sequencial utiliza um algoritmo guloso que escalona as operações uma a uma. O algoritmo seleciona sempre o job que pode começar mais cedo e escalona sua próxima operação não processada. Para determinar quando uma operação pode ser executada, o algoritmo verifica:
-
-1. As restrições de precedência dentro do mesmo trabalho (sequência das operações)
-2. A disponibilidade da máquina necessária
-
-O algoritmo mantém:
-- Um array de contadores para o número de operações já escalonadas por trabalho
-- Um array com o tempo mais cedo possível para iniciar a próxima operação de cada trabalho
-- Um mapeamento das ocupações de cada máquina ao longo do tempo
-
-O pseudocódigo do algoritmo sequencial é:
-
-função schedule_jobs_sequential():
-  scheduled_ops[MAX_JOBS] = {0}    // Contador de operações escalonadas por job
-  earliest_starts[MAX_JOBS] = {0}   // Tempo mais cedo para cada job
-  total_ops = num_jobs * num_operations
-  scheduled_count = 0
-
-enquanto scheduled_count < total_ops:
-    earliest_job = -1
-    earliest_time = INFINITO
-    
-    // Encontra o job que pode iniciar mais cedo
-    para cada job j de 0 até num_jobs-1:
-        se scheduled_ops[j] < num_operations e earliest_starts[j] < earliest_time:
-            earliest_time = earliest_starts[j]
-            earliest_job = j
-    
-    // Obtém a próxima operação deste job
-    op = scheduled_ops[earliest_job]
-    machine = jobs[earliest_job][op].machine
-    duration = jobs[earliest_job][op].duration
-    
-    // Encontra slot disponível na máquina
-    start_time = find_available_time(machine, duration, earliest_starts[earliest_job])
-    
-    // Escalona a operação
-    jobs[earliest_job][op].start_time = start_time
-    scheduled_ops[earliest_job]++
-    scheduled_count++
-    
-    // Atualiza o tempo mais cedo para a próxima operação deste job
-    earliest_starts[earliest_job] = start_time + duration
-
-
-### Algoritmo Paralelo
-
-A implementação paralela segue a metodologia de Foster para paralelização:
-
-1. **Particionamento**: O problema é decomposto por trabalhos, distribuindo os jobs entre as threads
-2. **Comunicação**: As threads compartilham o estado das máquinas
-3. **Aglomeração**: Os trabalhos são agrupados para serem atribuídos às threads
-4. **Mapeamento**: As threads são mapeadas em cores do processador usando OpenMP
-
-A implementação paralela utiliza um mecanismo de distribuição round-robin dos jobs entre as threads disponíveis. Para evitar condições de corrida no acesso às máquinas, a implementação utiliza uma região crítica para a verificação e atualização do estado das máquinas.
-
-O pseudocódigo do algoritmo paralelo é:
-
-função schedule_with_strict_division(num_threads):
-  scheduled_ops[MAX_JOBS] = {0}    // Contador de operações escalonadas por job
-  earliest_starts[MAX_JOBS] = {0}   // Tempo mais cedo para cada job
-  op_assigned[MAX_JOBS][MAX_OPERATIONS]  // Mapeamento de operações para threads
-  assigned_count = 0
-
-// Atribuir jobs às threads (round-robin)
-para cada job j de 0 até num_jobs-1:
-    thread = j % num_threads  // Distribuição round-robin
-    para cada operação op de 0 até num_operations-1:
-        op_assigned[j][op] = thread
-
-enquanto assigned_count < total_ops:
-    // Execução paralela com OpenMP
-    #pragma omp parallel num_threads(num_threads)
-    {
-        thread_id = omp_get_thread_num()
-        
-        // Região crítica para escalonar operações
-        #pragma omp critical (scheduler)
-        {
-            para cada job j de 0 até num_jobs-1:
-                // Verificar se este job está atribuído a esta thread
-                se op_assigned[j][0] == thread_id:
-                    op = scheduled_ops[j]
-                    se op < num_operations:
-                        // Escalonar a próxima operação deste job
-                        machine = jobs[j][op].machine
-                        duration = jobs[j][op].duration
-                        start_time = find_available_time(machine, duration, earliest_starts[j])
-                        
-                        jobs[j][op].start_time = start_time
-                        scheduled_ops[j]++
-                        assigned_count++
-                        earliest_starts[j] = start_time + duration
-                        
-                        // Log da operação
-                        log_operation(thread_id, j, op)
-                }
-        }
-    }
-}
-
-Esta abordagem paralela garante que cada thread trabalhe com um conjunto específico de jobs, minimizando a contenção, embora ainda exija sincronização ao acessar o estado das máquinas.
-
-## Relatório Detalhado
-
-### A. Implementação Sequencial
-
-#### 1. Descrição do Algoritmo de Atribuição dos Tempos de Início
-
-O algoritmo sequencial implementado utiliza uma abordagem gulosa (greedy) para escalonar as operações. O princípio básico é:
-
-1. Para cada iteração, encontrar o job que pode iniciar sua próxima operação não escalonada mais cedo
-2. Para este job, encontrar o primeiro slot de tempo disponível na máquina necessária para a operação
-3. Escalonar a operação no slot encontrado
-4. Atualizar o tempo mais cedo possível para a próxima operação deste job
-
-Este algoritmo pode ser descrito formalmente como:
-
-Inicializar earliest_starts[j] = 0 para cada job j
-Inicializar scheduled_ops[j] = 0 para cada job j
-Enquanto houver operações não escalonadas:
-Selecionar job j com menor earliest_starts[j] e scheduled_ops[j] < num_operations
-Obter próxima operação op = scheduled_ops[j] do job j
-Obter máquina m requerida pela operação
-Obter duração d da operação
-Calcular start_time = encontrar_slot_disponível(m, d, earliest_starts[j])
-Escalonar a operação: jobs[j][op].start_time = start_time
-Atualizar earliest_starts[j] = start_time + d
-Incrementar scheduled_ops[j]
-
-
-A função `encontrar_slot_disponível(máquina, duração, earliest_start)` verifica todos os slots de tempo já ocupados na máquina e retorna o primeiro slot disponível que pode acomodar a operação sem conflitos com operações já escalonadas.
-
-#### 2. Implementação Sequencial
-
-A implementação sequencial está organizada da seguinte forma:
-
-- **Estruturas de dados**: Utiliza `Operation` para representar cada operação e `JobShopProblem` para encapsular todo o problema
-- **Entrada/Saída**: Funções para ler o problema de um arquivo e escrever a solução em outro
-- **Escalonamento**: Implementação do algoritmo guloso descrito acima
-- **Medição de desempenho**: Sistema de logging que registra tempos de execução
-
-O código é estruturado para garantir que todas as restrições do problema sejam respeitadas:
-- Operações de um mesmo job são executadas em sequência
-- Cada máquina processa apenas uma operação por vez
-- Uma vez iniciada, uma operação não pode ser interrompida
-
-### B. Implementação Paralela com Partilha de Memória
-
-#### 1. Proposta de Particionamento (Metodologia de Foster)
-
-Seguindo a metodologia de Foster, a paralelização foi implementada da seguinte forma:
-
-**a) Decomposição:**
-- **Decomposição por dados**: Os jobs são distribuídos entre as threads
-- **Granularidade**: Cada thread é responsável por processar um conjunto de jobs completos
-- **Objetos de computação**: Jobs (conjunto de operações sequenciais)
-- **Objetos de dados**: Estado das máquinas (disponibilidade temporal)
-
-**b) Comunicação:**
-- **Padrão de comunicação**: Produtor-consumidor (threads produzem/consomem slots de tempo nas máquinas)
-- **Canais de comunicação**: Através de estruturas de dados compartilhadas em memória
-- **Tipo de comunicação**: Síncrona em regiões críticas
+├── data/ # Input files (.jss) containing problem definitions
+│ ├── jobshop_small.jss # Small dataset (3 jobs, 3 machines)
+│ ├── jobshop_medium.jss # Medium dataset (6 jobs, 6 machines)
+│ └── jobshop_huge.jss # Large dataset (25 jobs, 25 machines)
+├── logs/ # Directory to store execution and analysis logs
+│ ├── *_execution_times.txt # Average execution times recorded
+│ ├── sequence.txt # Operation sequences executed (for debugging/analysis)
+│ └── timing.txt # Detailed timing per thread (in the parallel version)
+├── mappings/ # Mapping files used for visualization
+│ ├── mapping_small.txt # Mapping for the small dataset
+│ ├── mapping_medium.txt # Mapping for the medium dataset
+│ └── mapping_huge.txt # Mapping for the large dataset
+├── viz/ # Directory to save generated visualizations
+├── job_shop_sequential.c # Source code of the sequential implementation
+├── job_shop_parallel.c # Source code of the parallel implementation with OpenMP
+├── job_shop_visualizer.py # Python script to generate Gantt charts
+└── README.md # This file (report)
 
-**c) Aglomeração:**
-- **Estratégia de agrupamento**: Round-robin (job_id % num_threads)
-- **Balanceamento de carga**: Estático na atribuição inicial
-- **Minimização de comunicação**: Cada thread processa todas as operações dos jobs atribuídos a ela
-- **Escalabilidade**: Limitada pela contenção nas estruturas compartilhadas
-
-**d) Mapeamento:**
-- **Estratégia de mapeamento**: Gerenciada pelo runtime do OpenMP
-- **Implementação**: Diretiva `#pragma omp parallel num_threads(num_threads)`
-- **Adaptação ao hardware**: Limitação do número de threads para problemas pequenos
-- **Balanceamento dinâmico**: Mecanismo de fallback para casos de deadlock
-
-#### 2. Implementação Paralela
-
-A implementação paralela (`job_shop_parallel.c`) utiliza OpenMP para criar múltiplas threads que escalonam operações simultaneamente. Os principais elementos são:
-
-- **Distribuição de trabalho**: Jobs são distribuídos entre threads usando um esquema round-robin
-- **Exclusão mútua**: Regiões críticas protegem o acesso às estruturas compartilhadas
-- **Logging**: Cada thread registra suas atividades para análise posterior
-
-A função `schedule_with_strict_division()` implementa a estratégia de distribuição de trabalho, garantindo que cada thread processe um conjunto específico de jobs.
-
-#### 3. Características do Programa Paralelo
-
-**a) Variáveis Globais Compartilhadas:**
-- **Somente Leitura:**
-  - `problem.num_jobs`, `problem.num_machines`, `problem.num_operations`: Dimensões do problema
-  - Identificadores de threads e contadores de iteração
-
-- **Leitura e Escrita:**
-  - `problem.jobs[][].start_time`: Tempos de início das operações
-  - `scheduled_ops[]`: Contadores de operações escalonadas
-  - `earliest_starts[]`: Tempos mais cedo para a próxima operação
-  - `problem.thread_logs[][]`: Logs de execução
+---
 
-**b) Seções Críticas e Condições de Corrida:**
-- **Principal seção crítica**: `#pragma omp critical (scheduler)` protege:
-  - Verificação de disponibilidade de máquinas
-  - Atualização dos tempos de início das operações
-  - Incremento de contadores de operações escalonadas
+## A. Sequential Implementation
 
-- **Potenciais condições de corrida sem proteção:**
-  - Acesso concorrente à mesma máquina por diferentes threads
-  - Múltiplas threads tentando registrar logs simultaneamente
+This section describes the greedy algorithm used in the sequential implementation and details about its structure.
 
-**c) Técnicas de Exclusão Mútua:**
-- **Regiões críticas OpenMP**: Protegem seções que manipulam o estado das máquinas
-- **Distribuição por job**: Minimiza a contenção ao atribuir jobs completos a threads específicas
-- **Fallback sequencial**: Mecanismo para resolver deadlocks em caso de contenção excessiva
+### 1. Description of the Sequential Scheduling Algorithm
 
-### C. Análise do Desempenho
+The sequential implementation adopts a simple greedy algorithm to schedule the operations. At each step, the algorithm identifies the job whose next unscheduled operation can start the earliest. Once this job is identified, it tries to find the first available time slot on the machine required for that operation, starting from the completion time of the previous operation of the same job.
 
-#### 1. Mecanismos de Medição do Tempo de Execução
+The flow of the algorithm is as follows:
 
-O sistema de medição de tempo implementado utiliza:
+1. Initialize the earliest possible start time for each job (```earliest_starts```) as 0.
+2. Initialize the counter of scheduled operations for each job (```scheduled_ops```) as 0.
+3. While there are unscheduled operations:
+    * Find the job (```j```) with the smallest value in ```earliest_starts[j]``` that still has operations left to schedule (```scheduled_ops[j] < num_operations```).
+    * Identify the next operation (```op```) to be scheduled for job ```j```: ```op = scheduled_ops[j]```.
+    * Determine the machine (```m```) and the duration (```d```) required by operation ```op``` of job ```j```.
+    * Calculate the start time (```start_time```) for this operation. This is the earliest time when machine ```m``` is free *after* ```earliest_starts[j]```.
+    * Schedule the operation: assign ```start_time``` to operation ```op``` of job ```j```.
+    * Update the earliest possible start time for the *next* operation of job ```j```: ```earliest_starts[j] = start_time + duration```.
+    * Increment the counter of scheduled operations for job ```j```: ```scheduled_ops[j]++```.
 
-- **Versão sequencial**: Usa `clock()` para medir o tempo de CPU
-- **Versão paralela**: Usa `omp_get_wtime()` para medição precisa de tempo de parede
-- **Repetições**: Cada execução é repetida 10 vezes para obter médias confiáveis
-- **Logging**: Os tempos são registrados em arquivos de log detalhados
+The auxiliary function ```find_available_time(machine, duration, minimum_start_time)``` is responsible for scanning the already occupied time slots on ```machine``` and returning the first moment, equal to or later than ```minimum_start_time```, where the operation can be allocated without conflicts with already scheduled operations on that machine.
 
-Ambas as versões evitam I/O durante a medição de desempenho para não influenciar os resultados.
+### 2. Structure of the Sequential Implementation (`job_shop_sequential.c`)
 
-#### 2. Resultados de Desempenho
+The sequential implementation code is organized with the following main components:
 
-**Tamanho dos Problemas:**
-- **Small**: 3 jobs × 3 máquinas = 9 operações
-- **Medium**: 6 jobs × 6 máquinas = 36 operações
-- **Huge**: 25 jobs × 25 máquinas = 625 operações
+* **Data Structures**: Defines structures such as `Operation` (for details of each operation: machine, duration, start time) and `JobShopProblem` (to encapsulate the number of jobs, machines, operations, and job data).
+* **Input and Output**: Functions to load the problem from a `.jss` file and save the scheduled solution to another file.
+* **Scheduling Logic**: Implements the greedy algorithm described above, ensuring compliance with the JSSP constraints.
+* **Time Measurement**: Includes basic logging mechanisms and CPU time measurement (using `clock()`) for performance evaluation.
 
-**Tempos de Execução para o Conjunto Huge:**
+The sequential implementation serves as a baseline for comparison and validation of the parallel version, providing a correct solution (although not necessarily optimal in makespan, due to the greedy approach) to the problem.
 
-| Implementação         | Threads | Tempo Médio (s) | Operações | Tempo por Op (s) |
-|-----------------------|---------|-----------------|-----------|------------------|
-| Sequencial            | 1       | 0.000500        | 1250      | 4.00×10⁻⁷        |
-| Paralela              | 4       | 0.001200        | 1250      | 9.60×10⁻⁷        |
 
-**Análise por Dataset:**
+## B. Parallel Implementation with Shared Memory
 
-| Dataset | Tamanho     | Sequencial (s) | Paralelo (s) | Speedup | Eficiência |
-|---------|-------------|----------------|--------------|---------|------------|
-| Small   | 3×3 = 9 ops | ~0.000050*     | ~0.000200*   | ~0.25   | ~6.25%     |
-| Medium  | 6×6 = 36 ops| ~0.000100*     | ~0.000500*   | ~0.20   | ~5.00%     |
-| Huge    | 25×25 = 625 | 0.000500       | 0.001200     | 0.42    | 10.42%     |
+This section details the parallelization approach using Foster's methodology and the implementation with OpenMP.
 
-\* Valores estimados com base na proporção do tamanho dos problemas, já que os logs detalhados foram fornecidos apenas para o conjunto "Huge".
+### 1. Partitioning Proposal (Foster's Methodology)
 
-**Distribuição de Trabalho entre Threads (Conjunto Huge, 4 threads):**
+The parallelization of the greedy solution followed Foster’s methodology:
 
-| Thread ID | Operações Processadas | % do Total | Desvio da Média |
-|-----------|----------------------|------------|-----------------|
-| 0         | 350                  | 28.0%      | +12.0%          |
-| 1         | 300                  | 24.0%      | -4.0%           |
-| 2         | 300                  | 24.0%      | -4.0%           |
-| 3         | 300                  | 24.0%      | -4.0%           |
-| **Total** | **1250**             | **100%**   | **16.0%***      |
+* **a) Partitioning:** The problem was decomposed based on **data**. Jobs are the primary units of computation distributed among threads. The granularity is one full job: each thread is responsible for scheduling *all* operations of a subset of jobs. Shared data objects include the information about machine availability over time.
+* **b) Communication:** Threads need to communicate and synchronize access to the shared machine state. The communication pattern is essentially producer-consumer: threads "produce" machine occupations when scheduling operations and "consume" available slots when searching for start times. Communication occurs implicitly through access to shared memory structures and is synchronous at points requiring mutual exclusion.
+* **c) Agglomeration:** The decomposed jobs were agglomerated and assigned to threads using a simple **round-robin distribution** strategy. Job `j` is assigned to the thread with ID `j % num_threads`. This strategy aims for static load balancing. Agglomeration by job seeks to minimize communication, since once a thread decides to schedule the next operation of an assigned job, it only needs to interact with the global machine state to find a time slot.
+* **d) Mapping:** The mapping of logical threads (created by OpenMP) to physical cores is managed by the OpenMP runtime (typically `1:1` or `1:N` depending on the hardware and configuration). The directive `#pragma omp parallel num_threads(num_threads)` controls thread creation and the number of threads used. For very small problems, too many threads can increase overhead, so the number of threads should be tuned appropriately.
 
-\* Calculado como a diferença percentual entre a thread com mais operações e a thread com menos.
+### 2. Structure of the Parallel Implementation (`job_shop_parallel.c`)
 
-**Gráfico de Speedup (estimado):**
+The parallel implementation uses OpenMP to create a pool of threads that concurrently execute the scheduling logic. The key components are:
 
-Speedup
-^
-1.0 |
-|                    Ideal
-0.8 |                   /
-|                  /
-0.6 |                 /
-|                /
-0.4 |               /  Real
-|              *
-0.2 |         *   /
-|    *      /
-0.0 +----*----+-----+-----+----> Threads
-1     4     8    16
+* **Work Distribution**: Before the main scheduling loop, jobs are assigned to threads using round-robin logic.
+* **Parallel Scheduling Loop**: The main loop that selects and schedules operations is enclosed within an OpenMP parallel region.
+* **Mutual Exclusion**: Critical sections (`#pragma omp critical`) are used to protect access to shared data structures representing machine states and scheduled operations counters.
+* **Per-Thread Logging**: Mechanisms are in place so that each thread independently records its activities (scheduled operations, timing) for later analysis.
 
-#### 3. Análise do Speedup e Eficiência
+The function `schedule_with_strict_division()` encapsulates the initial assignment logic and the parallel scheduling loop.
 
-Para o conjunto "Huge" com 625 operações:
 
-- **Speedup**: 0.42x (a versão paralela é mais lenta que a sequencial)
-- **Eficiência**: 10.42% (eficiência = speedup / número de threads × 100%)
+### 3. Characteristics of the Parallel Program
 
-**Análise dos Resultados:**
+The shared-memory parallel nature raises important questions about data management and synchronization:
 
-1. **Speedup Negativo**: A implementação paralela apresenta um speedup menor que 1, indicando que a versão sequencial é mais eficiente. Isso é típico de problemas com:
-   - Custo de comunicação/sincronização maior que o benefício da paralelização
-   - Problema de tamanho insuficiente para compensar o overhead de criação e gerenciamento de threads
-   - Possíveis contenções nos acessos às estruturas compartilhadas
+* **a) Shared Global Variables:**
+    * **Read-Only:**
+        * `problem.num_jobs`, `problem.num_machines`, `problem.num_operations`: Problem dimensions, read by all threads.
+        * Fixed characteristics of operations (machine and duration) defined in the problem input.
+    * **Read and Write (Require Synchronization):**
+        * `problem.jobs[][].start_time`: The start time of each operation, written by the thread that schedules it.
+        * `scheduled_ops[]`: Array counting how many operations of each job have already been scheduled. Used to identify the next operation of a job.
+        * `earliest_starts[]`: Array storing the earliest possible start time for the next operation of a given job (depends on the finish time of the previous operation of the same job).
+        * Internal structures representing machine occupation over time (used by the `find_available_time` function).
+        * `problem.thread_logs[][]`: Buffers for per-thread logging.
 
-2. **Distribuição de Carga**: Existe um desequilíbrio de 16% entre as threads, com a thread 0 processando mais operações (28%) que as demais (24% cada).
+* **b) Critical Sections and Potential Race Conditions:**
+    * The main critical section (`#pragma omp critical (scheduler)`) encloses the core scheduling logic: selecting the job whose next operation can start the earliest, finding an available machine slot, assigning the start time, and updating job state counters.
+    * **Unprotected Race Conditions:** If the access to finding a machine's available slot and the subsequent update of machine occupation were not protected, multiple threads could simultaneously find the "same" available slot and attempt to schedule conflicting operations on the same machine at the same time. Concurrent access to `scheduled_ops` and `earliest_starts` would also cause unpredictable results.
 
-3. **Granularidade Fina**: O problema apresenta operações muito rápidas (ordem de microssegundos), o que faz com que o overhead de sincronização supere o ganho de processamento paralelo. A média de tempo por operação no sequencial é de apenas 8.00×10^-7 segundos.
+* **c) Mutual Exclusion Techniques:**
+    * **OpenMP Critical Regions**: The use of `#pragma omp critical` ensures that only one thread at a time can execute the enclosed code, protecting the access and modification of shared data structures managing the scheduling state (machines, operation counters).
+    * **Work Distribution by Job**: Although not a direct mutual exclusion mechanism, assigning entire jobs to specific threads *reduces* the likelihood of multiple threads competing simultaneously for the *same* job, although they may still compete for *machines*.
+    * **Fallback Mechanism**: In some greedy parallel scheduling implementations for JSSP, a fallback mechanism to sequential mode or a different type of synchronization may be necessary if contention becomes too high or deadlocks occur (threads waiting for resources held by others within critical sections). Although the exact deadlock mechanism is not detailed in the pseudocode, the mention of a fallback suggests this consideration.
 
-4. **Overhead de Sincronização**: A região crítica que protege a verificação e atualização do estado das máquinas causa contenção significativa.
 
-#### 4. Possíveis Melhorias
+## C. Performance Analysis
 
-Com base nos resultados obtidos, as seguintes melhorias poderiam ser implementadas:
+This section presents the measurement methodology, the results obtained, and the analysis of speedup and efficiency of the implementations.
 
-1. **Particionamento por máquinas**: Uma estratégia alternativa seria particionar por máquinas em vez de por jobs, reduzindo a contenção.
+### 1. Execution Time Measurement Mechanisms
 
-2. **Granularidade adaptativa**: Implementar um mecanismo que decide dinamicamente entre execução sequencial ou paralela com base no tamanho do problema.
+To evaluate performance, appropriate timing mechanisms were used for each context:
 
-3. **Redução das regiões críticas**: Minimizar o escopo das regiões críticas ou usar estruturas de dados que permitam maior concorrência.
+* **Sequential Implementation**: Uses the `clock()` function from the standard C library to measure the CPU time spent executing the scheduling algorithm.
+* **Parallel Implementation**: Uses the `omp_get_wtime()` function provided by OpenMP, which measures the wall-clock time, more relevant for evaluating real parallelization gains.
 
-4. **Lock por máquina**: Implementar um lock individual por máquina em vez de uma única região crítica, permitindo operações paralelas em máquinas diferentes.
+To obtain robust results, each configuration (problem + number of threads) was executed **10 times**, and the average execution time was calculated. I/O operations (reading the problem, writing the solution) were excluded from the timing to isolate only the scheduling algorithm performance. Average times were recorded in log files.
 
-5. **Escalonamento dinâmico**: Utilizar a cláusula `schedule(dynamic)` do OpenMP para balancear melhor a carga entre as threads.
+### 2. Performance Results
 
-## Conclusões
+Tests were conducted on the three provided datasets, representing different problem sizes:
 
-O desenvolvimento e análise das implementações sequencial e paralela do Problema Job-Shop nos permitiu obter várias conclusões importantes:
+* **Small**: 3 jobs × 3 machines = 9 total operations.
+* **Medium**: 6 jobs × 6 machines = 36 total operations.
+* **Huge**: 25 jobs × 25 machines = 625 total operations. (Note: the log indicates 1250 "operations," possibly counting internal steps or scheduling attempts, but the JSSP problem size is 625 distinct operations).
 
-1. **Eficácia do algoritmo sequencial**: A implementação sequencial apresenta um desempenho satisfatório para os tamanhos de problema testados, com tempos de execução muito baixos mesmo para o conjunto "huge" (25×25).
+**Table of Average Execution Times (Huge Dataset, 10 Executions):**
 
-2. **Desafios da paralelização**: A paralelização deste problema específico apresenta desafios significativos devido à natureza interdependente das restrições de escalonamento.
+| Implementation | Threads | Average Time (s) | Number of Jobs | Number of Operations (JSSP) |
+| :------------- | :------ | :--------------- | :------------- | :-------------------------- |
+| Sequential     | 1       | 0.000500          | 25             | 625                         |
+| Parallel       | 4       | 0.001200          | 25             | 625                         |
 
-3. **Overhead de sincronização**: Para problemas pequenos ou com operações muito rápidas, o custo de sincronização pode superar os ganhos de processamento paralelo.
+*Note: Times for Small and Medium were not directly provided in the detailed log, but the analysis is based on the observed proportion in the Huge dataset.*
 
-4. **Balanceamento de carga**: Mesmo com a distribuição round-robin, observamos um desequilíbrio na carga de trabalho entre as threads.
+**Summary Table of Performance, Speedup, and Efficiency (Estimated for Small/Medium):**
 
-5. **Escalabilidade**: Os resultados sugerem que o algoritmo paralelo atual não escalaria bem com o aumento do número de threads, devido à contenção nas regiões críticas.
+| Dataset | Size (Jobs × Machines) | Total Ops | T_seq (s)       | T_parallel (s, 4 threads) | Speedup (`S_p`) | Efficiency (`E_p`) |
+| :------ | :--------------------- | :-------- | :-------------- | :------------------------ | :-------------- | :----------------- |
+| Small   | 3 × 3                   | 9         | ≈ `5 × 10^{-5}` | ≈ `2 × 10^{-4}`            | ≈ 0.25          | ≈ 6.25%             |
+| Medium  | 6 × 6                   | 36        | ≈ `1 × 10^{-4}` | ≈ `5 × 10^{-4}`            | ≈ 0.20          | ≈ 5.00%             |
+| Huge    | 25 × 25                 | 625       | 0.000500        | 0.001200                   | 0.42            | 10.50%              |
 
-A análise realizada neste trabalho demonstra a importância de avaliar cuidadosamente a adequação da paralelização para cada tipo de problema. Nem todos os problemas se beneficiam igualmente da computação paralela, especialmente quando as dependências de dados e a granularidade das operações não favorecem a execução concorrente.
+*Speedup (`S_p`) calculated as `T_sequential / T_parallel`. Efficiency (`E_p`) calculated as `(S_p / num_threads) × 100%`. Values for Small and Medium are based on proportional estimates from Huge.*
 
-Para trabalhos futuros, seria interessante explorar algoritmos alternativos para o JSSP que possam se beneficiar mais da paralelização, como abordagens baseadas em metaheurísticas com populações paralelas (algoritmos genéticos ou colônia de formigas), que normalmente apresentam melhor escalabilidade em ambientes paralelos.
+**Workload Distribution Among Threads (Huge Dataset, 4 Threads):**
 
-## Descrição do Problema
+| Thread ID | Operations Processed | % of Total (Base 1250) | Deviation from Average (25%) |
+| :-------- | :------------------- | :--------------------- | :--------------------------- |
+| 0         | 350                   | 28.0%                  | +3.0%                        |
+| 1         | 300                   | 24.0%                  | -1.0%                        |
+| 2         | 300                   | 24.0%                  | -1.0%                        |
+| 3         | 300                   | 24.0%                  | -1.0%                        |
+| **Total** | **1250**              | **100%**               |                              |
 
-O problema Job-Shop consiste em escalonar um conjunto de operações (jobs) em um conjunto de máquinas. Cada trabalho é composto por várias operações que devem ser processadas em uma ordem específica. Cada operação requer uma máquina específica por um período determinado. O objetivo é minimizar o tempo total de processamento (makespan) respeitando as seguintes restrições:
+*Note: The base of 1250 operations processed in the Huge log differs from the 625 operations of the 25x25 JSSP. This may indicate multiple scheduling attempts or a different counting of internal work units by the algorithm.*
 
-- Uma máquina só pode processar uma operação por vez
-- As operações de um mesmo trabalho devem ser executadas sequencialmente
-- Uma vez iniciada, a operação não pode ser interrompida
 
-## Requisitos
+### 3. Speedup and Efficiency Analysis
 
-- GCC com suporte para OpenMP
-- Python 3.x com matplotlib para visualização
-- Sistema operacional Linux ou Windows (com MinGW para Windows)
+For the "Huge" dataset, which is the largest and where the greatest benefit from parallelization would be expected, we observed a **speedup of 0.42x**. This means that the parallel version with 4 threads is **slower** than the sequential version. The calculated efficiency is approximately 10.50%.
 
-## Compilação
+This lack of positive speedup can be attributed to several interrelated factors:
 
-O projeto inclui um Makefile para facilitar a compilação. Para compilar todos os programas, execute:
+1.  **Synchronization Overhead**: The greedy algorithm for JSSP has significant dependencies between operations (precedence within jobs and machine availability). The critical region used to protect access to the machine state and the selection of the next schedulable operation imposes a substantial bottleneck. Multiple threads competing for access to this critical region spend more time waiting (contention) than executing useful work in parallel.
+2.  **Fine Granularity of Operations**: As seen in the average time per operation in the sequential version (approximately `0.0005s / 625 ≈ 8 × 10^{-7}` seconds per JSSP operation, or `0.0005s / 1250 ≈ 4 × 10^{-7}` seconds per unit counted in the log), the operations are extremely fast. The cost of entering and exiting an OpenMP critical region or the overhead of thread management becomes greater than the execution time of the work it protects.
+3.  **Load Imbalance**: While the initial round-robin distribution helps, the greedy algorithm may cause some threads to have jobs whose next operations become eligible for scheduling earlier than others, leading to idle times for some threads while others wait in the critical region. The observed distribution shows that Thread 0 processed visibly more work units (28%) than the others (24%).
+4.  **Problem Size**: Even the "Huge" dataset (625 operations) may not be large enough for the benefits of parallelization (in a synchronization-heavy approach) to outweigh the overhead on a system with few cores. HPC problems typically show significant speedup on much larger datasets.
 
+In summary, the greedy approach, although simple and effective sequentially, proves difficult to parallelize efficiently using a single critical region around the central scheduling logic due to the high frequency of shared access and the fine granularity of tasks.
+
+### 4. Possible Improvements and Future Work
+
+To improve the performance of the parallel implementation, the following approaches could be explored:
+
+1.  **Machine Partitioning**: Instead of distributing jobs among threads, distribute control over sets of machines. Threads would be responsible for scheduling operations on their assigned machines, possibly reducing contention if operations from different jobs use different machines simultaneously. However, synchronization would still be required when scheduling operations that depend on the completion of an operation on *another* machine.
+2.  **Machine-specific Locks**: Instead of a single global lock (critical region), use a separate lock for *each* machine. This would allow operations on different machines to be scheduled in parallel without interference, reducing global contention and enabling greater parallelism when machines are free.
+3.  **Adaptive Granularity**: Implement a mechanism that detects the problem size or workload and dynamically decides whether to execute the sequential version (for small problems, where overhead dominates) or the parallel version (for large problems).
+4.  **Reduce Critical Region Scope**: Carefully analyze the code within the critical region to ensure that only instructions that *really* require mutual exclusion are inside it.
+5.  **OpenMP Dynamic Scheduling**: Use the `schedule(dynamic)` or `schedule(guided)` clauses in the parallel loop, which can help distribute the workload among threads more evenly at runtime, in contrast to the static round-robin distribution.
+6.  **Alternative Algorithms**: Explore parallelization of alternative algorithms for the JSSP, such as metaheuristics (Genetic Algorithms, Ant Colony Optimization) that operate on populations of solutions and adapt better to parallelism models with less synchronization and sparse communication.
+
+---
+
+## Conclusions
+
+The development of this project provided a practical study of both the sequential and parallel implementations for the Job-Shop Problem, resulting in the following conclusions:
+
+* The **sequential implementation** with a greedy algorithm is simple, efficient, and provides a quick solution for the problem sizes tested, serving as a good baseline.
+* The **direct parallelization** of the greedy algorithm with OpenMP, using a single critical region to manage access to the shared machine state, introduced significant **synchronization overhead**.
+* For the datasets used, the parallel version was **slower** than the sequential version (speedup < 1), mainly due to high contention in the critical region and the fine granularity of the operations.
+* **Load balancing**, even with round-robin distribution, can be a challenge in parallel greedy algorithms due to the nature of selecting the next eligible task.
+* The **scalability** of the current parallel approach appears to be limited, indicating that performance is unlikely to improve linearly (and could even worsen) with an increasing number of threads.
+
+This work reinforces that successful parallelization heavily depends on the nature of the problem, the granularity of tasks, and how communication and synchronization are managed. Not all problems benefit from parallelization in the same way, and careful analysis is crucial to selecting the most suitable strategy. Future improvements should focus on reducing contention and exploring parallelism models that better match the characteristics of JSSP.
+
+---
+
+## How to Use the Project
+
+### Requirements
+
+To compile and run the project, you will need:
+
+* A C compiler compatible with C99 and OpenMP support (such as GCC or Clang).
+* Python 3.x with the `matplotlib` library installed (for visualization).
+* A Linux or similar operating system (or Windows with MinGW for compilation).
+
+### Compilation
 ```bash
-# Compilar versão sequencial
+# Compile the sequential version
 gcc -Wall -O2 -o jobshop_sequential.exe job_shop_sequential.c
 
-# Compilar versão paralela (com OpenMP)
+# Compile the parallel version (with OpenMP)
 gcc -Wall -O2 -fopenmp -o jobshop_parallel.exe job_shop_parallel.c
-
-# Gerar otimizacao jobshop sequencial
-./jobshop_sequential.exe data/jobshop_small.jss jobshopsmall_seq.jss
-
-# Gerar otimizacao jobshop paralela
-./jobshop_parallel.exe data/jobshop_medium.jss jobshopmedium_parallel.jss 4
 ```
-
-## Visualização dos Resultados
-O projeto inclui um script Python para visualizar os resultados em formato de gráfico de Gantt:
+Execution The generated executables (`jobshop_sequential.exe and jobshop_parallel.exe`) accept command-line arguments for the problem input file and the output file for the solution. The parallel version also accepts the number of threads.
 
 ```bash
-python job_shop_visualizer.py --type <tipo> --input_file <arquivo_entrada> --output_file <nome_saida>
+# Run the sequential version
+./jobshop_sequential.exe data/jobshop_small.jss output_small_seq.jss
 
+# Run the parallel version with N threads
+./jobshop_parallel.exe data/jobshop_medium.jss output_medium_par.jss 4 # Example with 4 threads
 ```
-
-Onde:
-
-<tipo> é 0 para conjunto pequeno, 1 para médio e 2 para grande
-<arquivo_entrada> é o arquivo de saída gerado pela execução do programa
-<nome_saida> é o nome do arquivo de imagem a ser gerado
-
-Exemplo:
+Results Visualization The Python `script job_shop_visualizer.py` can be used to generate Gantt charts from the scheduled output files.
 
 ```bash
-python job_shop_visualizer.py --type 0 --input_file jobshopsmall_seq.jss --output_file job_shop_small.png
+python job_shop_visualizer.py --type <problem_type> --input_file <output_jss_file> --output_file <png_file_name>
+```
+
+Where:
+- *<problem_type>*: 0 for the "small" dataset, 1 for "medium", 2 for "huge".
+- <output_jss_file>: Path to the output file generated by the program execution (e.g., output_small_seq.jss).
+- <png_file_name>: The name of the PNG image file to be saved (e.g., gantt_small_seq.png).
+
+Example:
+
+```bash
+# After running the sequential version for the small problem
+python job_shop_visualizer.py --type 0 --input_file output_small_seq.jss --output_file gantt_small_seq.png
 
 ```
