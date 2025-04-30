@@ -1,0 +1,13 @@
+Input: jobshop_J350_M350, Requested Threads: 4, Effective Threads: 4, Avg Time: 14.202500 seconds
+Input: jobshop_J350_M350, Sequential, Avg Time: 16.987900 seconds
+Input: jobshop_J350_M350, Requested Threads: 16, Effective Threads: 16, Avg Time: 9.555800 seconds
+Input: jobshop_J350_M350, Requested Threads: 8, Effective Threads: 8, Avg Time: 9.347700 seconds
+Input: jobshop_J350_M350, Requested Threads: 16, Effective Threads: 16, Avg Time: 9.443400 seconds
+Input: jobshop_J350_M350, Requested Threads: 2, Effective Threads: 2, Avg Time: 9.445000 seconds
+Input: jobshop_J350_M350, Requested Threads: 2, Effective Threads: 2, Avg Time: 12.772100 seconds
+Input: jobshop_J350_M350, Requested Threads: 2, Effective Threads: 2, Avg Time: 9.414900 seconds
+Input: jobshop_J350_M350, Requested Threads: 8, Effective Threads: 8, Avg Time: 9.265000 seconds
+Input: jobshop_J350_M350, Requested Threads: 8, Effective Threads: 8, Avg Time: 9.446100 seconds
+Input: jobshop_J350_M350, Requested Threads: 16, Effective Threads: 16, Avg Time: 11.408500 seconds
+Input: jobshop_J350_M350, Requested Threads: 4, Effective Threads: 4, Avg Time: 9.493300 seconds
+Input: jobshop_J350_M350, Requested Threads: 4, Effective Threads: 4, Avg Time: 9.451500 seconds
