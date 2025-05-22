@@ -556,51 +556,6 @@ for threads in 2 4 8 16; do
 done
 ```
 
-### Performance Benchmarking Script
-
-```bash
-#!/bin/bash
-# performance_test.sh
-
-PROBLEM_FILE="data/jobshop_J350_M350.jss"
-NUM_RUNS=10
-
-echo "=== JSSP Performance Benchmark ==="
-echo "Problem: $PROBLEM_FILE"
-echo "Runs per configuration: $NUM_RUNS"
-echo ""
-
-# Test sequential
-echo "Testing Sequential Implementation..."
-total_time=0
-for i in $(seq 1 $NUM_RUNS); do
-    start_time=$(date +%s.%N)
-    ./jobshop_sequential $PROBLEM_FILE output_seq_$i.jss > /dev/null
-    end_time=$(date +%s.%N)
-    runtime=$(echo "$end_time - $start_time" | bc -l)
-    total_time=$(echo "$total_time + $runtime" | bc -l)
-done
-avg_seq=$(echo "scale=6; $total_time / $NUM_RUNS" | bc -l)
-echo "Sequential average: ${avg_seq}s"
-
-# Test parallel configurations
-for threads in 2 4 8 16; do
-    echo "Testing Parallel with $threads threads..."
-    total_time=0
-    for i in $(seq 1 $NUM_RUNS); do
-        start_time=$(date +%s.%N)
-        ./jobshop_parallel $PROBLEM_FILE output_par_${threads}t_$i.jss $threads > /dev/null
-        end_time=$(date +%s.%N)
-        runtime=$(echo "$end_time - $start_time" | bc -l)
-        total_time=$(echo "$total_time + $runtime" | bc -l)
-    done
-    avg_par=$(echo "scale=6; $total_time / $NUM_RUNS" | bc -l)
-    speedup=$(echo "scale=3; $avg_seq / $avg_par" | bc -l)
-    efficiency=$(echo "scale=2; $speedup / $threads * 100" | bc -l)
-    echo "Parallel $threads threads: ${avg_par}s (Speedup: ${speedup}x, Efficiency: ${efficiency}%)"
-done
-```
-
 ### Visualization and Analysis
 
 ```bash
