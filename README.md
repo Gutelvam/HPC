@@ -672,8 +672,6 @@ The comprehensive analysis provides a foundation for future improvements and val
 
 ---
 
-**📧 Contact**: For questions regarding this implementation, please refer to the course materials or submit issues through the project repository.
-
 **🔗 References**: 
 - Foster, I. (1995). *Designing and Building Parallel Programs: Concepts and Tools for Parallel Software Engineering*
 - OpenMP Architecture Review Board. (2021). *OpenMP Application Programming Interface Version 5.2*
